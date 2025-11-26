@@ -23,7 +23,7 @@ import { useEffect, useState, useRef } from "react";
 import { AI_NAME, CLEAR_CHAT_TEXT, OWNER_NAME, WELCOME_MESSAGE } from "@/config";
 import Image from "next/image";
 import Link from "next/link";
-import FileUploader from "@/app/components/FileUploader";
+import FileUploader from "./components/FileUploader";
 
 
 const formSchema = z.object({
