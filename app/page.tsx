@@ -201,21 +201,23 @@ export default function Chat() {
                           Message
                         </FieldLabel>
                         <div className="relative h-13">
-                          <Input
-                            {...field}
-                            id="chat-form-message"
-                            className="h-15 pr-15 pl-5 bg-card rounded-[20px]"
-                            placeholder="Type your message here..."
-                            disabled={status === "streaming"}
-                            aria-invalid={fieldState.invalid}
-                            autoComplete="off"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                form.handleSubmit(onSubmit)();
-                              }
-                            }}
-                          />
+                          {/* Extra left padding to make room for the upload button */}
+<Input
+  {...field}
+  id="chat-form-message"
+  className="h-15 pr-15 pl-12 bg-card rounded-[20px]"
+  placeholder="Type your message here..."
+  disabled={status === "streaming"}
+  aria-invalid={fieldState.invalid}
+  autoComplete="off"
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.handleSubmit(onSubmit)();
+    }
+  }}
+/>
+
                           {(status == "ready" || status == "error") && (
                             <Button
                               className="absolute right-3 top-3 rounded-full"
