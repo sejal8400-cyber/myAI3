@@ -1,0 +1,50 @@
+// app/api/tools/groww-quotes.ts
+import type { ToolHandler } from "ai"; // if you have types, otherwise ignore
+// This tool runs on the server and queries Groww using GROWW_ACCESS_TOKEN from env.
+
+type GrowwRequest = {
+  tickers: string[];          // e.g. ["RELIANCE", "TCS"]
+  exchange?: string;          // e.g. "NSE"
+  segment?: string;           // e.g. "CASH"
+};
+
+export async function growwQuotesTool(input: GrowwRequest) {
+  if (!input || !Array.isArray(input.tickers) || input.tickers.length === 0) {
+    return { error: "missing tickers array" };
+  }
+  const accessToken = process.env.GROWW_ACCESS_TOKEN;
+  if (!accessToken) return { error: "server misconfigured: missing GROWW_ACCESS_TOKEN" };
+
+  const exchange = input.exchange || "NSE";
+  const segment = input.segment || "CASH";
+
+  const results: Record<string, any> = {};
+  for (const t of input.tickers) {
+    try {
+      const trading_symbol = encodeURIComponent(t);
+      const url = `https://api.groww.in/v1/live-data/quote?exchange=${exchange}&segment=${segment}&trading_symbol=${trading_symbol}`;
+
+      const resp = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${accessToken}`,
+          "X-API-VERSION": "1.0"
+        }
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        results[t] = { error: `groww error ${resp.status}`, body: txt };
+        continue;
+      }
+
+      const json = await resp.json();
+      results[t] = { status: json?.status ?? "ok", payload: json?.payload ?? json };
+    } catch (e: any) {
+      results[t] = { error: String(e) };
+    }
+  }
+
+  return { success: true, quotes: results };
+}
