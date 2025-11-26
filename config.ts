@@ -1,16 +1,9 @@
+// app/config.ts
 import { openai } from "@ai-sdk/openai";
 import { fireworks } from "@ai-sdk/fireworks";
 import { wrapLanguageModel, extractReasoningMiddleware } from "ai";
 
 export const MODEL = openai('gpt-4.1');
-
-// If you want to use a Fireworks model, uncomment the following code and set the FIREWORKS_API_KEY in Vercel
-// NOTE: Use middleware when the reasoning tag is different than think. (Use ChatGPT to help you understand the middleware)
-// export const MODEL = wrapLanguageModel({
-//     model: fireworks('fireworks/deepseek-r1-0528'),
-//     middleware: extractReasoningMiddleware({ tagName: 'think' }), // Use this only when using Deepseek
-// });
-
 
 function getDateAndTime(): string {
     const now = new Date();
@@ -30,8 +23,8 @@ function getDateAndTime(): string {
 
 export const DATE_AND_TIME = getDateAndTime();
 
-export const AI_NAME = "MyAI3";
-export const OWNER_NAME = "FirstName LastName";
+export const AI_NAME = "Maya";
+export const OWNER_NAME = "Sejal & Karthik";
 
 export const WELCOME_MESSAGE = `Hello! I'm ${AI_NAME}, an AI assistant created by ${OWNER_NAME}.`
 
@@ -54,3 +47,8 @@ export const MODERATION_DENIAL_MESSAGE_DEFAULT = "Your message violates our guid
 
 export const PINECONE_TOP_K = 40;
 export const PINECONE_INDEX_NAME = "my-ai";
+
+/**
+ * FRONTEND_ONLY mode: no backend endpoints. Use only user-input for analysis.
+ */
+export const FRONTEND_ONLY = true;
