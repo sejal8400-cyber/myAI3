@@ -18,16 +18,14 @@ export const maxDuration = 30;
 export async function POST(req: Request) {
   const {
     messages,
-    data,
+    imageBase64,
+    fileName,
   }: {
     messages: UIMessage[];
-    data?: {
-      imageBase64?: string;
-      fileName?: string;
-    };
+    imageBase64?: string;
+    fileName?: string;
   } = await req.json();
 
-  // Existing moderation logic on latest user text
   const latestUserMessage = messages.filter((msg) => msg.role === "user").pop();
 
   if (latestUserMessage) {
@@ -77,16 +75,14 @@ export async function POST(req: Request) {
     }
   }
 
-  // Convert UI messages to model messages
   const baseModelMessages = convertToModelMessages(messages);
 
   let modelMessagesWithImage: CoreMessage[];
 
-  if (data?.imageBase64 && baseModelMessages.length > 0) {
+  if (imageBase64 && baseModelMessages.length > 0) {
     const initialMessages = baseModelMessages.slice(0, -1);
     const lastMessage = baseModelMessages[baseModelMessages.length - 1];
 
-    // Extract text content from the last message
     let lastText = "";
 
     if (typeof lastMessage.content === "string") {
@@ -116,14 +112,13 @@ export async function POST(req: Request) {
           : []),
         {
           type: "image" as const,
-          image: data.imageBase64,
+          image: imageBase64,
         },
       ],
     };
 
     modelMessagesWithImage = [...initialMessages, combinedLast];
   } else {
-    // No image attached, use messages as usual
     modelMessagesWithImage = baseModelMessages as CoreMessage[];
   }
 
