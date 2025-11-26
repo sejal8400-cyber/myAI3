@@ -16,15 +16,18 @@ import { ChatHeaderBlock } from "@/app/parts/chat-header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UIMessage } from "ai";
 import { useEffect, useState, useRef } from "react";
-import { AI_NAME, CLEAR_CHAT_TEXT, OWNER_NAME, WELCOME_MESSAGE } from "@/config";
+import {
+  AI_NAME,
+  CLEAR_CHAT_TEXT,
+  OWNER_NAME,
+  WELCOME_MESSAGE,
+} from "@/config";
 import Image from "next/image";
 import Link from "next/link";
 
 const formSchema = z.object({
   // Allow empty message so user can send just an image
-  message: z
-    .string()
-    .max(2000, "Message must be at most 2000 characters."),
+  message: z.string().max(2000, "Message must be at most 2000 characters."),
 });
 
 const STORAGE_KEY = "chat-messages";
@@ -90,7 +93,6 @@ export default function Chat() {
   const [durations, setDurations] = useState<Record<string, number>>({});
   const welcomeMessageShownRef = useRef<boolean>(false);
 
-  // track selected image
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const stored =
@@ -107,6 +109,7 @@ export default function Chat() {
     setIsClient(true);
     setDurations(stored.durations);
     setMessages(stored.messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -164,16 +167,15 @@ export default function Chat() {
       if (imageFile) {
         const base64 = await fileToBase64(imageFile);
 
-        // If no user text, give a default instruction for OCR
         const textToSend =
           trimmed ||
           "Please read the text in this image and return exactly what is written.";
 
+        // body here will be merged into the JSON sent to /api/chat
         sendMessage(
           { text: textToSend },
           {
-            // this goes to req.body.data in /api/chat
-            data: {
+            body: {
               imageBase64: base64,
               fileName: imageFile.name,
             },
@@ -182,7 +184,6 @@ export default function Chat() {
 
         setImageFile(null);
       } else {
-        // normal text only message
         sendMessage({ text: trimmed });
       }
 
@@ -198,6 +199,7 @@ export default function Chat() {
     const newDurations = {};
     setMessages(newMessages);
     setDurations(newDurations);
+    setImageFile(null);
     saveMessagesToStorage(newMessages, newDurations);
     toast.success("Chat cleared");
   }
@@ -324,9 +326,7 @@ export default function Chat() {
                             <Button
                               className="absolute right-3 top-3 rounded-full"
                               type="submit"
-                              disabled={
-                                !field.value.trim() && !imageFile
-                              }
+                              disabled={!field.value.trim() && !imageFile}
                               size="icon"
                             >
                               <ArrowUp className="size-4" />
