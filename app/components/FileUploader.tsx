@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button'; // adjust to your shadcn path or swap to a regular button if missing
-// If you don't have Button import, replace <Button> with <button> below
+import { Button } from '@/components/ui/button'; // adjust if your shadcn button path differs
 
 export default function FileUploader() {
   const [file, setFile] = useState<File | null>(null);
@@ -17,7 +16,6 @@ export default function FileUploader() {
       const form = new FormData();
       form.append('file', file);
 
-      // POST to the API route (App Router): /api/upload-file
       const res = await fetch('/api/upload-file', {
         method: 'POST',
         body: form,
@@ -46,7 +44,6 @@ export default function FileUploader() {
       </div>
 
       <div>
-        {/* If Button import missing, replace <Button> with <button> below */}
         <Button type="submit" disabled={!file || loading}>
           {loading ? 'Uploading…' : 'Upload & Analyze'}
         </Button>
@@ -56,4 +53,3 @@ export default function FileUploader() {
     </form>
   );
 }
-
