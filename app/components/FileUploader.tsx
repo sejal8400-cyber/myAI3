@@ -1,131 +1,66 @@
 // app/components/FileUploader.tsx
-"use client";
+'use client';
+import React, { useRef, useState } from 'react';
+import { useChat } from 'ai/react'; // ensure 'ai' package installed
+import { Button } from '@/components/ui/button'; // adapt if path differs
 
-import React, { useRef, useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
-
-type Holding = { ticker: string; qty: number };
-
-export default function FileUploader({ sendMessage }: { sendMessage: any }) {
-  // const { sendMessage } = useChat(); // Removed internal hook
+export default function FileUploader() {
+  const { sendMessage } = useChat();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [preview, setPreview] = useState<Holding[] | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
+  const [previewText, setPreviewText] = useState<string | null>(null);
 
-  function openFilePicker() {
-    if (inputRef.current) inputRef.current.click();
+  function openFilePicker() { inputRef.current?.click(); }
+
+  function handleSelection(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
+    setFilename(f?.name ?? null);
+    setPreviewText(null);
   }
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleUpload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) return alert('Choose a file first');
     setLoading(true);
-    setFilename(file.name);
-    setPreview(null);
-
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase();
-      let holdings: Holding[] = [];
-
-      if (ext === "csv" || ext === "txt") {
-        const text = await file.text();
-        const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-        holdings = normalizeRowsToHoldings(parsed.data as any[]);
-      } else if (ext === "xls" || ext === "xlsx") {
-        const ab = await file.arrayBuffer();
-        const wb = XLSX.read(ab, { type: "array" });
-        const sheetName = wb.SheetNames[0];
-        const sheet = wb.Sheets[sheetName];
-        const json = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as any[];
-        holdings = normalizeRowsToHoldings(json);
-      } else {
-        throw new Error("Unsupported file type. Use CSV or Excel.");
-      }
-
-      if (!holdings || holdings.length === 0) {
-        throw new Error("No holdings found. Ensure CSV/XLSX has columns 'ticker' and 'qty' (or first two columns are ticker, qty).");
-      }
-
-      setPreview(holdings);
+      const form = new FormData();
+      form.append('file', file);
+      // POST to Node upload route
+      const res = await fetch('/api/upload-file', {
+        method: 'POST',
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || 'Upload failed');
+      // json.result should include processed portfolio summary
+      setPreviewText(JSON.stringify(json.result, null, 2));
+      // optionally send into chat as structured payload for AI analysis
+      const payloadText = `<HOLDINGS_JSON>${JSON.stringify(json.result)}</HOLDINGS_JSON>`;
+      await sendMessage({ text: `I've uploaded ${filename || 'file'}. Sending holdings for analysis.` });
+      await sendMessage({ text: payloadText });
     } catch (err: any) {
-      console.error("File parse failed:", err);
-      alert("Failed to parse file: " + (err?.message || err));
+      console.error(err);
+      alert(err.message || 'Upload failed');
     } finally {
       setLoading(false);
-      // reset input so same file can be reselected
-      if (inputRef.current) inputRef.current.value = "";
+      if (inputRef.current) inputRef.current.value = '';
+      setFile(null);
+      setFilename(null);
     }
-  }
-
-  function normalizeRowsToHoldings(rows: any[]): Holding[] {
-    const out: Record<string, number> = {};
-    for (const r of rows) {
-      const keys = Object.keys(r);
-      let ticker = "";
-      let qty: number | null = null;
-
-      if ("ticker" in r) ticker = String(r["ticker"]).trim();
-      else if ("symbol" in r) ticker = String(r["symbol"]).trim();
-      else if (keys.length >= 1) ticker = String(r[keys[0]]).trim();
-
-      if ("qty" in r) qty = Number(r["qty"]);
-      else if ("quantity" in r) qty = Number(r["quantity"]);
-      else if (keys.length >= 2) qty = Number(r[keys[1]]);
-
-      if (!ticker) continue;
-      if (!qty || isNaN(qty)) qty = 0;
-      if (!(ticker in out)) out[ticker] = 0;
-      out[ticker] += qty;
-    }
-    return Object.entries(out).map(([ticker, qty]) => ({ ticker, qty }));
-  }
-
-  async function confirmAndSend() {
-    if (!preview || preview.length === 0) return;
-    const payloadObj = { holdings: preview };
-    const payloadText = `<HOLDINGS_JSON>${JSON.stringify(payloadObj)}</HOLDINGS_JSON>\n`;
-    const messageText = `I've uploaded ${filename || "file"}. Please analyze these holdings based on the system instructions.\n\n${payloadText}`;
-    await sendMessage({ text: messageText });
-    setPreview(null);
-    setFilename(null);
   }
 
   return (
-    <div style={{ marginTop: 12 }}>
-      {/* Hidden input controlled by ref */}
-      <input
-        ref={inputRef}
-        id="file-upload-input"
-        type="file"
-        accept=".csv,.txt,.xls,.xlsx"
-        onChange={handleFile}
-        style={{ display: "none" }}
-      />
-
-      {/* Use explicit onClick to open file picker */}
-      <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-        <Button onClick={openFilePicker} variant="outline" size="sm">
-          Upload file
-        </Button>
-        {loading ? <span>Parsing…</span> : filename ? <span>{filename}</span> : null}
+    <div className="space-y-3">
+      <input ref={inputRef} type="file" accept=".csv,.txt,.xls,.xlsx" onChange={handleSelection} style={{display:'none'}} />
+      <div className="flex items-center gap-3">
+        <Button type="button" onClick={openFilePicker}>Choose file</Button>
+        <span>{filename ?? 'No file selected'}</span>
+        <Button onClick={handleUpload} disabled={!file || loading}>{loading ? 'Uploading…' : 'Upload & Analyze'}</Button>
       </div>
-
-      {preview && (
-        <div style={{ marginTop: 12, border: "1px solid #eee", padding: 8, maxWidth: 560 }}>
-          <div><strong>Preview detected holdings</strong></div>
-          <ul>
-            {preview.map((h) => <li key={h.ticker}>{h.ticker}: {h.qty}</li>)}
-          </ul>
-          <div style={{ marginTop: 8 }}>
-            <Button onClick={confirmAndSend} variant="default" size="sm">Confirm &amp; Send to Assistant</Button>
-            <Button onClick={() => { setPreview(null); setFilename(null); }} variant="ghost" size="sm" style={{ marginLeft: 8 }}>Cancel</Button>
-          </div>
-        </div>
-      )}
+      {previewText && <pre className="mt-2 bg-slate-50 p-2 rounded whitespace-pre-wrap">{previewText}</pre>}
     </div>
   );
 }
