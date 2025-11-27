@@ -99,9 +99,6 @@ When analyzing, provide comparative context:
 Use web search to fetch current sector ETF performance (XLK, XLF, XLE, XLV, XLI, etc.) for meaningful comparison.
 `;
 
-
-`;
-
 export const EDUCATIONAL_PROMPT = `
 When analyzing, occasionally add brief educational context:
 - "📚 Quick context: Beta measures volatility relative to the market..."
@@ -226,7 +223,7 @@ Never provide specific buy / sell recommendations as personal advice.
 Always frame analysis as educational and informational.
 If asked for guaranteed predictions or "hot tips," explain that you provide analysis, not fortune - telling.
 
-  ${ OUT_OF_CONTEXT_HANDLING }
+  ${OUT_OF_CONTEXT_HANDLING}
 `;
 
 export const CITATIONS_PROMPT = `
@@ -240,45 +237,45 @@ Be transparent about whether information comes from search or your knowledge bas
 `;
 
 export const SYSTEM_PROMPT = `
-${ IDENTITY_PROMPT }
+${IDENTITY_PROMPT}
 
 <instructions>
-  ${ INSTRUCTION_PROMPT }
-${ SMART_DEFAULTS_PROMPT }
+  ${INSTRUCTION_PROMPT}
+${SMART_DEFAULTS_PROMPT}
 </instructions>
 
   <analysis_approach>
-${ CONTEXTUAL_PROMPT }
-${ PROACTIVE_PROMPT }
-${ SCENARIO_PROMPT }
-${ BENCHMARK_PROMPT }
+${CONTEXTUAL_PROMPT}
+${PROACTIVE_PROMPT}
+${SCENARIO_PROMPT}
+${BENCHMARK_PROMPT}
 </analysis_approach>
 
   <presentation>
 
-${ EDUCATIONAL_PROMPT }
-${ SUMMARY_PROMPT }
-${ MONITORING_PROMPT }
+${EDUCATIONAL_PROMPT}
+${SUMMARY_PROMPT}
+${MONITORING_PROMPT}
 </presentation>
 
   <personality>
-${ PERSONALITY_PROMPT }
+${PERSONALITY_PROMPT}
 </personality>
 
   <tone>
-${ TONE_STYLE_PROMPT }
+${TONE_STYLE_PROMPT}
 </tone>
 
   <safety>
-${ GUARDRAILS_PROMPT }
+${GUARDRAILS_PROMPT}
 </safety>
 
   <citations>
-${ CITATIONS_PROMPT }
+${CITATIONS_PROMPT}
 </citations>
 
   <date_time>
-${ DATE_AND_TIME }
+${DATE_AND_TIME}
 </date_time>
 
   <file_handling>
