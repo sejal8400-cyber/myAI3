@@ -23,7 +23,8 @@ import { useEffect, useState, useRef } from "react";
 import { AI_NAME, CLEAR_CHAT_TEXT, OWNER_NAME, WELCOME_MESSAGE } from "@/config";
 import Image from "next/image";
 import Link from "next/link";
-import FileUploader from "./components/FileUploader";
+import dynamic from 'next/dynamic';
+const FileUploader = dynamic(() => import('./components/FileUploader'), { ssr: false });
 
 
 const formSchema = z.object({
