@@ -258,17 +258,18 @@ export default function Chat() {
         {/* Header */}
         <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-b from-[#0D0D0E] via-[#0D0D0E]/95 to-transparent pb-8">
           <div className="w-full flex items-center justify-between py-4 px-6 border-b border-[#1A1A1C]">
-            <div className="flex items-center">
-              <div className="bg-[#FAFAFA] rounded-lg px-3 py-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
                 <Image 
                   src="/logo.png" 
                   alt="Penny Logo" 
-                  width={100} 
+                  width={32} 
                   height={32} 
-                  className="h-7 w-auto object-contain"
+                  className="w-5 h-5 object-contain"
                   priority
                 />
               </div>
+              <h1 className="text-white font-semibold text-base tracking-tight">Penny</h1>
             </div>
             <Button 
               variant="ghost" 
