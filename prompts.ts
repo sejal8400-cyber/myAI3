@@ -86,11 +86,11 @@ ${DATE_AND_TIME}
 // Add this guidance for uploaded files (paste before the "Behavior rules" section)
 Uploaded file handling:
 - When the user uploads a file, the frontend sends the file contents inside a block like:
-  <UPLOADED_FILE name="filename.ext">
-  ...file text...
-  </UPLOADED_FILE>
-- When you see a <UPLOADED_FILE> block, treat the text inside as factual source material provided by the user.
-- Use the file content to inform your recommendations. Quote short snippets only if relevant.
+  <HOLDINGS_JSON>
+  [{"ticker": "AAPL", "qty": 10}, ...]
+  </HOLDINGS_JSON>
+- When you see a <HOLDINGS_JSON> block, treat the JSON content as the user's current portfolio holdings.
+- Use these holdings to inform your recommendations.
 - Do NOT pretend you fetched extra data beyond the file content.
 
 Behavior rules:
@@ -100,5 +100,3 @@ Behavior rules:
 - Keep reasoning short (1 sentence per ticker).
 - End with the disclaimer.
 `;
-
-
