@@ -1,4 +1,4 @@
-// app/chat/page.tsx
+// app/chat/page.tsx  (replace existing content)
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react'; // kept as in your original code
 import { ArrowUp, Loader2, Plus, Square, Upload } from 'lucide-react';
 import { MessageWall } from '@/components/messages/message-wall';
 import { ChatHeader } from '@/app/parts/chat-header';
@@ -25,6 +25,7 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
 const formSchema = z.object({
+  // Allow empty message so user can send just a file
   message: z.string().max(2000, 'Message must be at most 2000 characters.'),
 });
 
@@ -40,8 +41,12 @@ const loadMessagesFromStorage = (): { messages: UIMessage[]; durations: Record<s
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return { messages: [], durations: {} };
+
     const parsed = JSON.parse(stored);
-    return { messages: parsed.messages || [], durations: parsed.durations || {} };
+    return {
+      messages: parsed.messages || [],
+      durations: parsed.durations || {},
+    };
   } catch (error) {
     console.error('Failed to load messages from localStorage:', error);
     return { messages: [], durations: {} };
@@ -88,14 +93,15 @@ export default function Chat() {
   const [durations, setDurations] = useState<Record<string, number>>({});
   const welcomeMessageShownRef = useRef<boolean>(false);
 
-  // CSV file state (replaces image flow)
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvPreview, setCsvPreview] = useState<{ ticker: string; qty: number }[] | null>(null);
-  const [csvFilename, setCsvFilename] = useState<string | null>(null);
+  // FILE state (replaces imageFile flow)
+  const [file, setFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<{ ticker: string; qty: number }[] | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
 
   const stored = typeof window !== 'undefined' ? loadMessagesFromStorage() : { messages: [], durations: {} };
   const [initialMessages] = useState<UIMessage[]>(stored.messages);
 
+  // keep your original useChat import usage
   const { messages, sendMessage, status, stop, setMessages } = useChat({
     messages: initialMessages,
   });
@@ -126,7 +132,12 @@ export default function Chat() {
       const welcomeMessage: UIMessage = {
         id: `welcome-${Date.now()}`,
         role: 'assistant',
-        parts: [{ type: 'text', text: WELCOME_MESSAGE }],
+        parts: [
+          {
+            type: 'text',
+            text: WELCOME_MESSAGE,
+          },
+        ],
       };
       setMessages([welcomeMessage]);
       saveMessagesToStorage([welcomeMessage], {});
@@ -136,54 +147,56 @@ export default function Chat() {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { message: '' },
+    defaultValues: {
+      message: '',
+    },
   });
 
-  // parse CSV/XLSX file client-side to produce preview
-  async function parseFileForPreview(file: File) {
-    const name = file.name.toLowerCase();
+  // parse file (csv/xlsx) client-side for preview
+  async function parseFileForPreview(f: File) {
+    const name = f.name.toLowerCase();
     try {
       if (name.endsWith('.csv') || name.endsWith('.txt')) {
-        const text = await file.text();
+        const text = await f.text();
         const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
         const holdings = normalizeRowsToHoldings(parsed.data as any[]);
-        setCsvPreview(holdings);
+        setFilePreview(holdings);
       } else if (name.endsWith('.xls') || name.endsWith('.xlsx')) {
-        const ab = await file.arrayBuffer();
+        const ab = await f.arrayBuffer();
         const wb = XLSX.read(ab, { type: 'array' });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as any[];
         const holdings = normalizeRowsToHoldings(json);
-        setCsvPreview(holdings);
+        setFilePreview(holdings);
       } else {
         throw new Error('Unsupported file type. Use CSV or Excel (xls/xlsx).');
       }
     } catch (err: any) {
       console.error('Failed to parse file for preview', err);
       toast.error('Failed to parse file. Ensure it has columns like ticker,symbol and qty,quantity');
-      setCsvPreview(null);
+      setFilePreview(null);
     }
   }
 
-  // Handle file selection from input
+  // file input handler — keeps same pattern as your original input
   function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    setCsvFile(file);
-    setCsvFilename(file?.name ?? null);
-    setCsvPreview(null);
-    if (file) parseFileForPreview(file);
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
+    setFileName(f?.name ?? null);
+    setFilePreview(null);
+    if (f) parseFileForPreview(f);
   }
 
-  // upload file to server and send holdings to chat
-  async function handleUploadAndSendHoldings() {
+  // upload file to server route; returns server result or error
+  async function uploadFileToServer() {
     try {
-      if (!csvFile) return { ok: false, error: 'No file' };
-      const formData = new FormData();
-      formData.append('file', csvFile, csvFile.name);
+      if (!file) return { ok: false, error: 'No file' };
+      const fd = new FormData();
+      fd.append('file', file, file.name);
 
       const res = await fetch('/api/upload-file', {
         method: 'POST',
-        body: formData,
+        body: fd,
       });
 
       const json = await res.json();
@@ -191,7 +204,6 @@ export default function Chat() {
         console.warn('Server upload failed', json);
         return { ok: false, error: json?.error || 'Upload failed' };
       }
-      // response shape: { result: {...} }
       return { ok: true, result: json.result };
     } catch (err: any) {
       console.error('Upload error', err);
@@ -202,37 +214,43 @@ export default function Chat() {
   async function onSubmit(data: z.infer<typeof formSchema>) {
     const trimmed = data.message.trim();
 
-    if (!trimmed && !csvFile) {
-      toast.error('Type a message or attach a CSV file first.');
+    // require text or file (like original required image or text)
+    if (!trimmed && !file) {
+      toast.error('Type a message or attach a portfolio file first.');
       return;
     }
 
     try {
-      if (csvFile) {
+      if (file) {
         // ensure preview parsed
-        if (!csvPreview) {
-          await parseFileForPreview(csvFile);
+        if (!filePreview) {
+          await parseFileForPreview(file);
         }
 
-        const payloadObj = { holdings: csvPreview ?? [] };
+        const payloadObj = { holdings: filePreview ?? [] };
         const payloadText = `<HOLDINGS_JSON>${JSON.stringify(payloadObj)}</HOLDINGS_JSON>\n`;
 
-        // upload to server (optional server processing) — don't block chat if upload fails
-        const uploadResp = await handleUploadAndSendHoldings();
+        // Upload file to server (optional server processing)
+        const uploadResp = await uploadFileToServer();
         if (!uploadResp?.ok) {
+          // still send to chat — server enrichment optional
           console.warn('Upload failed but will still send holdings to assistant', uploadResp);
         }
 
-        // send small human message + structured payload for the assistant
-        await sendMessage({ text: `I've uploaded ${csvFilename || 'a file'}. Sending holdings for analysis.` });
-        await sendMessage({ text: payloadText });
+        // Send a friendly message + the structured payload (same pattern as your image flow)
+        await sendMessage({ text: `I've uploaded ${fileName || 'a file'}. Sending holdings for analysis.` });
+        await sendMessage(
+          { text: payloadText },
+          // preserve old behaviour where you attached things in `body` for image; here we don't include base64
+          {}
+        );
 
-        // clear local CSV state
-        setCsvFile(null);
-        setCsvFilename(null);
-        setCsvPreview(null);
+        // clear file state
+        setFile(null);
+        setFileName(null);
+        setFilePreview(null);
       } else {
-        // normal text-only message
+        // text-only send (same as original)
         await sendMessage({ text: trimmed });
       }
 
@@ -248,8 +266,8 @@ export default function Chat() {
     const newDurations = {};
     setMessages(newMessages);
     setDurations(newDurations);
-    setCsvFile(null);
-    setCsvPreview(null);
+    setFile(null);
+    setFilePreview(null);
     saveMessagesToStorage(newMessages, newDurations);
     toast.success('Chat cleared');
   }
@@ -305,11 +323,11 @@ export default function Chat() {
             <div className="max-w-3xl w-full">
               <form id="chat-form" onSubmit={form.handleSubmit(onSubmit)}>
                 <FieldGroup>
-                  {/* CSV/XLSX upload row */}
+                  {/* FILE upload row (replaces image upload row) */}
                   <div className="flex items-center justify-between mb-2 gap-2">
                     <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                       <Upload className="size-4" />
-                      <span>{csvFilename ? csvFilename : 'Attach portfolio CSV/XLSX'}</span>
+                      <span>{fileName ? fileName : 'Attach portfolio CSV/XLSX'}</span>
                       <input
                         type="file"
                         accept=".csv,.txt,.xls,.xlsx"
@@ -317,9 +335,8 @@ export default function Chat() {
                         onChange={onFileSelected}
                       />
                     </label>
-
-                    {csvFilename && (
-                      <button type="button" className="text-[11px] text-muted-foreground underline" onClick={() => { setCsvFile(null); setCsvFilename(null); setCsvPreview(null); }}>
+                    {fileName && (
+                      <button type="button" className="text-[11px] text-muted-foreground underline" onClick={() => { setFile(null); setFileName(null); setFilePreview(null); }}>
                         Remove file
                       </button>
                     )}
@@ -336,7 +353,7 @@ export default function Chat() {
                             {...field}
                             id="chat-form-message"
                             className="h-15 pr-15 pl-5 bg-card rounded-[20px]"
-                            placeholder={csvFile ? 'Optional: ask a question about the uploaded portfolio...' : 'Type your message here...'}
+                            placeholder={file ? 'Optional: add a question about the uploaded portfolio...' : 'Type your message here...'}
                             disabled={status === 'streaming'}
                             aria-invalid={fieldState.invalid}
                             autoComplete="off"
@@ -348,7 +365,7 @@ export default function Chat() {
                             }}
                           />
                           {(status === 'ready' || status === 'error') && (
-                            <Button className="absolute right-3 top-3 rounded-full" type="submit" disabled={!field.value.trim() && !csvFile} size="icon">
+                            <Button className="absolute right-3 top-3 rounded-full" type="submit" disabled={!field.value.trim() && !file} size="icon">
                               <ArrowUp className="size-4" />
                             </Button>
                           )}
@@ -364,12 +381,12 @@ export default function Chat() {
                 </FieldGroup>
               </form>
 
-              {/* CSV preview */}
-              {csvPreview && csvPreview.length > 0 && (
+              {/* File preview */}
+              {filePreview && filePreview.length > 0 && (
                 <div className="mt-3 p-3 border rounded max-w-3xl bg-card">
                   <div className="font-medium mb-2">Preview detected holdings</div>
                   <ul className="list-disc pl-5">
-                    {csvPreview.map((h) => (
+                    {filePreview.map((h) => (
                       <li key={h.ticker}>{h.ticker}: {h.qty}</li>
                     ))}
                   </ul>
@@ -377,7 +394,6 @@ export default function Chat() {
               )}
             </div>
           </div>
-
           <div className="w-full px-5 py-3 items-center flex justify-center text-xs text-muted-foreground">
             © {new Date().getFullYear()} {OWNER_NAME}&nbsp;
             <Link href="/terms" className="underline">Terms of Use</Link>
