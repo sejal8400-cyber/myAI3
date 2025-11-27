@@ -26,61 +26,6 @@ type IncomingJson = {
 };
 
 function normalizeRowsToHoldings(rows: any[]): { ticker: string; qty: number }[] {
-  // ------------------------ paste these helpers ABOVE export async function POST ------------------------
-async function fetchPricesAlphaVantage(symbols: string[]) {
-  const key = process.env.ALPHA_VANTAGE_KEY;
-  if (!key) {
-    console.log('[api/chat] ALPHA_VANTAGE_KEY not set; skipping price fetch');
-    return {};
-  }
-  const out: Record<string, number | null> = {};
-  for (const s of symbols.slice(0, 5)) { // limit to avoid rate-limit
-    try {
-      console.log('[api/chat] fetching price for', s);
-      const resp = await fetch(
-        `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(s)}&apikey=${key}`
-      );
-      const j = await resp.json();
-      const price = j?.['Global Quote']?.['05. price'];
-      out[s] = price ? Number(price) : null;
-      // polite sleep for free tier (adjust/remove in prod)
-      await new Promise((r) => setTimeout(r, 1200));
-    } catch (err) {
-      console.error('[api/chat] alpha fetch error for', s, err);
-      out[s] = null;
-    }
-  }
-  return out;
-}
-
-async function fetchWebContextForTickers(tickers: string[]) {
-  // expects your ./tools/web-search implementation to call an external API
-  const snippets: { ticker: string; hits: { title: string; snippet: string; url?: string }[] }[] = [];
-
-  for (const t of tickers.slice(0, 6)) { // limit to avoid large work
-    try {
-      console.log('[api/chat] webSearch query for', t);
-      // adapt this call to your webSearch API signature
-      const res = await webSearch({ q: `${t} stock news` });
-      // if your webSearch returns { items: [...] } adapt below
-      const items = (res?.items ?? res?.results ?? []).slice(0, 3);
-      snippets.push({
-        ticker: t,
-        hits: items.map((it: any) => ({
-          title: it.title || it.headline || '',
-          snippet: it.snippet || it.summary || it.excerpt || '',
-          url: it.url || it.link,
-        })),
-      });
-    } catch (err) {
-      console.error('[api/chat] webSearch error for', t, err);
-    }
-  }
-
-  return snippets;
-}
-// ------------------------ end helper block ------------------------
-
   const out: Record<string, number> = {};
   for (const r of rows) {
     const keys = Object.keys(r);
@@ -104,7 +49,6 @@ async function fetchWebContextForTickers(tickers: string[]) {
 }
 
 export async function POST(req: Request) {
-    console.log('[api/chat] POST received; content-type=', req.headers.get('content-type'));
   // support both JSON body and multipart/form-data with file
   let incoming: IncomingJson = {};
   let uploadedFile: File | null = null;
@@ -251,40 +195,6 @@ export async function POST(req: Request) {
         };
 
         modelMessagesToUse = [...(baseModelMessages as CoreMessage[]), fileMessage];
-        // ------------------ paste this right AFTER you have `holdings` array and modelMessagesToUse set ------------------
-try {
-  const tickers = (holdings || []).map((h: any) => h.ticker).filter(Boolean);
-  if (tickers.length > 0) {
-    // 1) fetch web context
-    const webSnips = await fetchWebContextForTickers(tickers);
-    if (webSnips && webSnips.length > 0) {
-      const webText = webSnips.map(w => {
-        const hits = w.hits.map(h => `- ${h.title}\n  ${h.snippet}\n  ${h.url ?? ''}`).join('\n');
-        return `Web search for ${w.ticker}:\n${hits}`;
-      }).join('\n\n');
-
-      modelMessagesToUse.push({
-        role: 'user',
-        content: [{ type: 'text', text: `Current web context for holdings:\n${webText}` }],
-      });
-      console.log('[api/chat] attached web search snippets to model messages');
-    }
-
-    // 2) fetch prices
-    const prices = await fetchPricesAlphaVantage(tickers);
-    if (Object.keys(prices).length > 0) {
-      modelMessagesToUse.push({
-        role: 'user',
-        content: [{ type: 'text', text: `Latest prices (AlphaVantage): ${JSON.stringify(prices)}` }],
-      });
-      console.log('[api/chat] attached prices to model messages');
-    }
-  }
-} catch (err) {
-  console.error('[api/chat] error while fetching web/price context', err);
-}
-// ------------------ end paste ------------------
-
       }
     } catch (err) {
       console.error("Error parsing uploaded file:", err);
@@ -359,4 +269,3 @@ try {
     sendReasoning: true,
   });
 }
-
