@@ -23,7 +23,15 @@ import { useEffect, useState, useRef } from "react";
 import { AI_NAME, CLEAR_CHAT_TEXT, OWNER_NAME, WELCOME_MESSAGE } from "@/config";
 import Image from "next/image";
 import Link from "next/link";
-import FileUploader from "./components/FileUploader";
+import FileUploader from '@/components/FileUploader';
+export default function UploadPage() {
+  return (
+    <main className="p-6">
+      <h1 className="text-2xl mb-4">Upload file</h1>
+      <FileUploader />
+    </main>
+  );
+}
 
 
 const formSchema = z.object({
