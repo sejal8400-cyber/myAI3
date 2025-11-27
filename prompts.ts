@@ -129,4 +129,3 @@ Behavior rules:
 - Keep reasoning short (3 sentences per ticker).
 - End with the disclaimer.
 `;
-```
