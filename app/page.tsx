@@ -6,43 +6,42 @@ import { toast } from "sonner";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@ai-sdk/react";
-import { ArrowUp, Eraser, Loader2, Plus, PlusIcon, Square } from "lucide-react";
+import { ArrowUp, Loader2, Plus, Square, Upload } from "lucide-react";
 import { MessageWall } from "@/components/messages/message-wall";
 import { ChatHeader } from "@/app/parts/chat-header";
 import { ChatHeaderBlock } from "@/app/parts/chat-header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UIMessage } from "ai";
 import { useEffect, useState, useRef } from "react";
-import { AI_NAME, CLEAR_CHAT_TEXT, OWNER_NAME, WELCOME_MESSAGE } from "@/config";
+import {
+  AI_NAME,
+  CLEAR_CHAT_TEXT,
+  OWNER_NAME,
+  WELCOME_MESSAGE,
+} from "@/config";
 import Image from "next/image";
 import Link from "next/link";
-import dynamic from 'next/dynamic';
-const FileUploader = dynamic(() => import('./components/FileUploader'), { ssr: false });
-
 
 const formSchema = z.object({
-  message: z
-    .string()
-    .min(1, "Message cannot be empty.")
-    .max(2000, "Message must be at most 2000 characters."),
+  // Allow empty message so user can send just an image
+  message: z.string().max(2000, "Message must be at most 2000 characters."),
 });
 
-const STORAGE_KEY = 'chat-messages';
+const STORAGE_KEY = "chat-messages";
 
 type StorageData = {
   messages: UIMessage[];
   durations: Record<string, number>;
 };
 
-const loadMessagesFromStorage = (): { messages: UIMessage[]; durations: Record<string, number> } => {
-  if (typeof window === 'undefined') return { messages: [], durations: {} };
+const loadMessagesFromStorage = (): {
+  messages: UIMessage[];
+  durations: Record<string, number>;
+} => {
+  if (typeof window === "undefined") return { messages: [], durations: {} };
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return { messages: [], durations: {} };
@@ -53,27 +52,53 @@ const loadMessagesFromStorage = (): { messages: UIMessage[]; durations: Record<s
       durations: parsed.durations || {},
     };
   } catch (error) {
-    console.error('Failed to load messages from localStorage:', error);
+    console.error("Failed to load messages from localStorage:", error);
     return { messages: [], durations: {} };
   }
 };
 
-const saveMessagesToStorage = (messages: UIMessage[], durations: Record<string, number>) => {
-  if (typeof window === 'undefined') return;
+const saveMessagesToStorage = (
+  messages: UIMessage[],
+  durations: Record<string, number>
+) => {
+  if (typeof window === "undefined") return;
   try {
     const data: StorageData = { messages, durations };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (error) {
-    console.error('Failed to save messages to localStorage:', error);
+    console.error("Failed to save messages to localStorage:", error);
   }
 };
+
+// helper to turn File into base64 string (no data: prefix)
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        const base64 = result.split(",")[1] || "";
+        resolve(base64);
+      } else {
+        reject(new Error("Failed to read file"));
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function Chat() {
   const [isClient, setIsClient] = useState(false);
   const [durations, setDurations] = useState<Record<string, number>>({});
   const welcomeMessageShownRef = useRef<boolean>(false);
 
-  const stored = typeof window !== 'undefined' ? loadMessagesFromStorage() : { messages: [], durations: {} };
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
+  const stored =
+    typeof window !== "undefined"
+      ? loadMessagesFromStorage()
+      : { messages: [], durations: {} };
   const [initialMessages] = useState<UIMessage[]>(stored.messages);
 
   const { messages, sendMessage, status, stop, setMessages } = useChat({
@@ -84,6 +109,7 @@ export default function Chat() {
     setIsClient(true);
     setDurations(stored.durations);
     setMessages(stored.messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -101,7 +127,11 @@ export default function Chat() {
   };
 
   useEffect(() => {
-    if (isClient && initialMessages.length === 0 && !welcomeMessageShownRef.current) {
+    if (
+      isClient &&
+      initialMessages.length === 0 &&
+      !welcomeMessageShownRef.current
+    ) {
       const welcomeMessage: UIMessage = {
         id: `welcome-${Date.now()}`,
         role: "assistant",
@@ -125,9 +155,43 @@ export default function Chat() {
     },
   });
 
-  function onSubmit(data: z.infer<typeof formSchema>) {
-    sendMessage({ text: data.message });
-    form.reset();
+  async function onSubmit(data: z.infer<typeof formSchema>) {
+    const trimmed = data.message.trim();
+
+    if (!trimmed && !imageFile) {
+      toast.error("Type a message or attach an image first.");
+      return;
+    }
+
+    try {
+      if (imageFile) {
+        const base64 = await fileToBase64(imageFile);
+
+        const textToSend =
+          trimmed ||
+          "Please read the text in this image and return exactly what is written.";
+
+        // body here will be merged into the JSON sent to /api/chat
+        sendMessage(
+          { text: textToSend },
+          {
+            body: {
+              imageBase64: base64,
+              fileName: imageFile.name,
+            },
+          }
+        );
+
+        setImageFile(null);
+      } else {
+        sendMessage({ text: trimmed });
+      }
+
+      form.reset();
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not send image. Please try again.");
+    }
   }
 
   function clearChat() {
@@ -135,6 +199,7 @@ export default function Chat() {
     const newDurations = {};
     setMessages(newMessages);
     setDurations(newDurations);
+    setImageFile(null);
     saveMessagesToStorage(newMessages, newDurations);
     toast.success("Chat cleared");
   }
@@ -147,9 +212,7 @@ export default function Chat() {
             <ChatHeader>
               <ChatHeaderBlock />
               <ChatHeaderBlock className="justify-center items-center">
-                <Avatar
-                  className="size-8 ring-1 ring-primary"
-                >
+                <Avatar className="size-8 ring-1 ring-primary">
                   <AvatarImage src="/logo.png" />
                   <AvatarFallback>
                     <Image src="/logo.png" alt="Logo" width={36} height={36} />
@@ -171,12 +234,17 @@ export default function Chat() {
             </ChatHeader>
           </div>
         </div>
+
         <div className="h-screen overflow-y-auto px-5 py-4 w-full pt-[88px] pb-[150px]">
           <div className="flex flex-col items-center justify-end min-h-full">
             {isClient ? (
               <>
-                <MessageWall messages={messages} status={status} durations={durations} onDurationChange={handleDurationChange} />
-<FileUploader />
+                <MessageWall
+                  messages={messages}
+                  status={status}
+                  durations={durations}
+                  onDurationChange={handleDurationChange}
+                />
                 {status === "submitted" && (
                   <div className="flex justify-start max-w-3xl w-full">
                     <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -190,18 +258,48 @@ export default function Chat() {
             )}
           </div>
         </div>
+
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-linear-to-t from-background via-background/50 to-transparent dark:bg-black overflow-visible pt-13">
           <div className="w-full px-5 pt-5 pb-1 items-center flex justify-center relative overflow-visible">
             <div className="message-fade-overlay" />
             <div className="max-w-3xl w-full">
               <form id="chat-form" onSubmit={form.handleSubmit(onSubmit)}>
                 <FieldGroup>
+                  {/* Image upload row */}
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                      <Upload className="size-4" />
+                      <span>{imageFile ? imageFile.name : "Attach image"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          setImageFile(file);
+                        }}
+                      />
+                    </label>
+                    {imageFile && (
+                      <button
+                        type="button"
+                        className="text-[11px] text-muted-foreground underline"
+                        onClick={() => setImageFile(null)}
+                      >
+                        Remove image
+                      </button>
+                    )}
+                  </div>
+
                   <Controller
                     name="message"
                     control={form.control}
                     render={({ field, fieldState }) => (
                       <Field data-invalid={fieldState.invalid}>
-                        <FieldLabel htmlFor="chat-form-message" className="sr-only">
+                        <FieldLabel
+                          htmlFor="chat-form-message"
+                          className="sr-only"
+                        >
                           Message
                         </FieldLabel>
                         <div className="relative h-13">
@@ -209,7 +307,11 @@ export default function Chat() {
                             {...field}
                             id="chat-form-message"
                             className="h-15 pr-15 pl-5 bg-card rounded-[20px]"
-                            placeholder="Type your message here..."
+                            placeholder={
+                              imageFile
+                                ? "Optional: add a question about the image..."
+                                : "Type your message here..."
+                            }
                             disabled={status === "streaming"}
                             aria-invalid={fieldState.invalid}
                             autoComplete="off"
@@ -220,20 +322,22 @@ export default function Chat() {
                               }
                             }}
                           />
-                          {(status == "ready" || status == "error") && (
+                          {(status === "ready" || status === "error") && (
                             <Button
                               className="absolute right-3 top-3 rounded-full"
                               type="submit"
-                              disabled={!field.value.trim()}
+                              disabled={!field.value.trim() && !imageFile}
                               size="icon"
                             >
                               <ArrowUp className="size-4" />
                             </Button>
                           )}
-                          {(status == "streaming" || status == "submitted") && (
+                          {(status === "streaming" ||
+                            status === "submitted") && (
                             <Button
                               className="absolute right-2 top-2 rounded-full"
                               size="icon"
+                              type="button"
                               onClick={() => {
                                 stop();
                               }}
@@ -250,10 +354,17 @@ export default function Chat() {
             </div>
           </div>
           <div className="w-full px-5 py-3 items-center flex justify-center text-xs text-muted-foreground">
-            © {new Date().getFullYear()} {OWNER_NAME}&nbsp;<Link href="/terms" className="underline">Terms of Use</Link>&nbsp;Powered by&nbsp;<Link href="https://ringel.ai/" className="underline">Ringel.AI</Link>
+            © {new Date().getFullYear()} {OWNER_NAME}&nbsp;
+            <Link href="/terms" className="underline">
+              Terms of Use
+            </Link>
+            &nbsp;Powered by&nbsp;
+            <Link href="https://ringel.ai/" className="underline">
+              Ringel.AI
+            </Link>
           </div>
         </div>
       </main>
-    </div >
+    </div>
   );
 }
