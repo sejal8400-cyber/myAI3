@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useChat } from '@ai-sdk/react';
-import { ArrowUp, Loader2, Plus, Upload, TrendingUp } from 'lucide-react';
+import { ArrowUp, Loader2, Plus, Upload } from 'lucide-react';
+import Image from 'next/image';
 import { MessageWall } from '@/components/messages/message-wall';
 import { UIMessage } from 'ai';
 import { useEffect, useState, useRef } from 'react';
@@ -257,13 +258,16 @@ export default function Chat() {
         {/* Header */}
         <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-b from-[#0D0D0E] via-[#0D0D0E]/95 to-transparent pb-8">
           <div className="w-full flex items-center justify-between py-4 px-6 border-b border-[#1A1A1C]">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#1A1A1C] flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-white font-semibold text-base tracking-tight">{AI_NAME}</h1>
-                <p className="text-[#6B6B6B] text-xs">Portfolio Advisor</p>
+            <div className="flex items-center">
+              <div className="bg-[#FAFAFA] rounded-lg px-3 py-1.5">
+                <Image 
+                  src="/logo.png" 
+                  alt="Penny Logo" 
+                  width={100} 
+                  height={32} 
+                  className="h-7 w-auto object-contain"
+                  priority
+                />
               </div>
             </div>
             <Button 
