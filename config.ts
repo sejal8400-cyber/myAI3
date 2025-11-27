@@ -3,7 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import { fireworks } from "@ai-sdk/fireworks";
 import { wrapLanguageModel, extractReasoningMiddleware } from "ai";
 
-export const MODEL = openai('gpt-4.1');
+export const MODEL = openai('gpt-4o');
 
 function getDateAndTime(): string {
     const now = new Date();
@@ -26,7 +26,7 @@ export const DATE_AND_TIME = getDateAndTime();
 export const AI_NAME = "Penny";
 export const OWNER_NAME = "Sejal & Karthik";
 
-export const WELCOME_MESSAGE = "Hi! I’m ${AI_NAME}, your AI financial portfolio assistant. Let’s get started."
+export const WELCOME_MESSAGE = "Hi! I’m penny, your AI financial portfolio assistant. Let’s get started.";
 
 export const CLEAR_CHAT_TEXT = "New";
 
