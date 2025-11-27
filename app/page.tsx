@@ -1,4 +1,3 @@
-// app/chat/page.tsx  (replace existing content)
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,23 +8,18 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { useChat } from '@ai-sdk/react'; // kept as in your original code
-import { ArrowUp, Loader2, Plus, Square, Upload } from 'lucide-react';
+import { useChat } from '@ai-sdk/react';
+import { ArrowUp, Loader2, Plus, Upload, TrendingUp } from 'lucide-react';
 import { MessageWall } from '@/components/messages/message-wall';
-import { ChatHeader } from '@/app/parts/chat-header';
-import { ChatHeaderBlock } from '@/app/parts/chat-header';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { UIMessage } from 'ai';
 import { useEffect, useState, useRef } from 'react';
 import { AI_NAME, CLEAR_CHAT_TEXT, OWNER_NAME, WELCOME_MESSAGE } from '@/config';
-import Image from 'next/image';
 import Link from 'next/link';
 
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
 const formSchema = z.object({
-  // Allow empty message so user can send just a file
   message: z.string().max(2000, 'Message must be at most 2000 characters.'),
 });
 
@@ -63,7 +57,6 @@ const saveMessagesToStorage = (messages: UIMessage[], durations: Record<string, 
   }
 };
 
-// Normalize parsed rows (CSV / XLSX) to list of holdings
 function normalizeRowsToHoldings(rows: any[]): { ticker: string; qty: number }[] {
   const out: Record<string, number> = {};
   for (const r of rows) {
@@ -93,7 +86,6 @@ export default function Chat() {
   const [durations, setDurations] = useState<Record<string, number>>({});
   const welcomeMessageShownRef = useRef<boolean>(false);
 
-  // FILE state (replaces imageFile flow)
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<{ ticker: string; qty: number }[] | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -101,7 +93,6 @@ export default function Chat() {
   const stored = typeof window !== 'undefined' ? loadMessagesFromStorage() : { messages: [], durations: {} };
   const [initialMessages] = useState<UIMessage[]>(stored.messages);
 
-  // keep your original useChat import usage
   const { messages, sendMessage, status, stop, setMessages } = useChat({
     messages: initialMessages,
   });
@@ -110,7 +101,6 @@ export default function Chat() {
     setIsClient(true);
     setDurations(stored.durations);
     setMessages(stored.messages);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -152,7 +142,6 @@ export default function Chat() {
     },
   });
 
-  // parse file (csv/xlsx) client-side for preview
   async function parseFileForPreview(f: File) {
     const name = f.name.toLowerCase();
     try {
@@ -178,7 +167,6 @@ export default function Chat() {
     }
   }
 
-  // file input handler — keeps same pattern as your original input
   function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setFile(f);
@@ -187,7 +175,6 @@ export default function Chat() {
     if (f) parseFileForPreview(f);
   }
 
-  // upload file to server route; returns server result or error
   async function uploadFileToServer() {
     try {
       if (!file) return { ok: false, error: 'No file' };
@@ -214,7 +201,6 @@ export default function Chat() {
   async function onSubmit(data: z.infer<typeof formSchema>) {
     const trimmed = data.message.trim();
 
-    // require text or file (like original required image or text)
     if (!trimmed && !file) {
       toast.error('Type a message or attach a portfolio file first.');
       return;
@@ -222,7 +208,6 @@ export default function Chat() {
 
     try {
       if (file) {
-        // ensure preview parsed
         if (!filePreview) {
           await parseFileForPreview(file);
         }
@@ -230,27 +215,21 @@ export default function Chat() {
         const payloadObj = { holdings: filePreview ?? [] };
         const payloadText = `<HOLDINGS_JSON>${JSON.stringify(payloadObj)}</HOLDINGS_JSON>\n`;
 
-        // Upload file to server (optional server processing)
         const uploadResp = await uploadFileToServer();
         if (!uploadResp?.ok) {
-          // still send to chat — server enrichment optional
           console.warn('Upload failed but will still send holdings to assistant', uploadResp);
         }
 
-        // Send a friendly message + the structured payload (same pattern as your image flow)
         await sendMessage({ text: `I've uploaded ${fileName || 'a file'}. Sending holdings for analysis.` });
         await sendMessage(
           { text: payloadText },
-          // preserve old behaviour where you attached things in `body` for image; here we don't include base64
           {}
         );
 
-        // clear file state
         setFile(null);
         setFileName(null);
         setFilePreview(null);
       } else {
-        // text-only send (same as original)
         await sendMessage({ text: trimmed });
       }
 
@@ -273,61 +252,91 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center font-sans dark:bg-black">
-      <main className="w-full dark:bg-black h-screen relative">
-        <div className="fixed top-0 left-0 right-0 z-50 bg-linear-to-b from-background via-background/50 to-transparent dark:bg-black overflow-visible pb-16">
-          <div className="relative overflow-visible">
-            <ChatHeader>
-              <ChatHeaderBlock />
-              <ChatHeaderBlock className="justify-center items-center">
-                <Avatar className="size-8 ring-1 ring-primary">
-                  <AvatarImage src="/logo.png" />
-                  <AvatarFallback>
-                    <Image src="/logo.png" alt="Logo" width={36} height={36} />
-                  </AvatarFallback>
-                </Avatar>
-                <p className="tracking-tight">Chat with {AI_NAME}</p>
-              </ChatHeaderBlock>
-              <ChatHeaderBlock className="justify-end">
-                <Button variant="outline" size="sm" className="cursor-pointer" onClick={clearChat}>
-                  <Plus className="size-4" />
-                  {CLEAR_CHAT_TEXT}
-                </Button>
-              </ChatHeaderBlock>
-            </ChatHeader>
+    <div className="flex h-screen items-center justify-center font-sans bg-[#0D0D0E]">
+      <main className="w-full bg-[#0D0D0E] h-screen relative">
+        {/* Header */}
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-b from-[#0D0D0E] via-[#0D0D0E]/95 to-transparent pb-8">
+          <div className="w-full flex items-center justify-between py-4 px-6 border-b border-[#1A1A1C]">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#1A1A1C] flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-white font-semibold text-base tracking-tight">{AI_NAME}</h1>
+                <p className="text-[#6B6B6B] text-xs">Portfolio Advisor</p>
+              </div>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-[#8B8B8B] hover:text-white hover:bg-[#1A1A1C] border border-[#2A2A2D] rounded-lg h-9 px-3"
+              onClick={clearChat}
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              {CLEAR_CHAT_TEXT}
+            </Button>
           </div>
         </div>
 
-        <div className="h-screen overflow-y-auto px-5 py-4 w-full pt-[88px] pb-[150px]">
+        {/* Chat Area */}
+        <div className="h-screen overflow-y-auto px-6 py-4 w-full pt-24 pb-48">
           <div className="flex flex-col items-center justify-end min-h-full">
             {isClient ? (
               <>
                 <MessageWall messages={messages} status={status} durations={durations} onDurationChange={handleDurationChange} />
                 {status === 'submitted' && (
-                  <div className="flex justify-start max-w-3xl w-full">
-                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  <div className="flex justify-start max-w-3xl w-full mt-4">
+                    <div className="flex items-center gap-2 text-[#6B6B6B]">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Analyzing...</span>
+                    </div>
                   </div>
                 )}
               </>
             ) : (
               <div className="flex justify-center max-w-2xl w-full">
-                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                <Loader2 className="w-5 h-5 animate-spin text-[#6B6B6B]" />
               </div>
             )}
           </div>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-linear-to-t from-background via-background/50 to-transparent dark:bg-black overflow-visible pt-13">
-          <div className="w-full px-5 pt-5 pb-1 items-center flex justify-center relative overflow-visible">
-            <div className="message-fade-overlay" />
+        {/* Input Area */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-[#0D0D0E] via-[#0D0D0E]/98 to-transparent pt-6">
+          <div className="w-full px-6 pb-4 items-center flex justify-center">
             <div className="max-w-3xl w-full">
               <form id="chat-form" onSubmit={form.handleSubmit(onSubmit)}>
-                <FieldGroup>
-                  {/* FILE upload row (replaces image upload row) */}
-                  <div className="flex items-center justify-between mb-2 gap-2">
-                    <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                      <Upload className="size-4" />
-                      <span>{fileName ? fileName : 'Attach portfolio CSV/XLSX'}</span>
+                <div className="bg-[#1A1A1C] rounded-xl border border-[#2A2A2D] overflow-hidden">
+                  {/* File upload section */}
+                  {fileName && filePreview && filePreview.length > 0 && (
+                    <div className="px-4 py-3 border-b border-[#2A2A2D]">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-white font-medium">Portfolio Holdings</span>
+                        <button 
+                          type="button" 
+                          className="text-xs text-[#6B6B6B] hover:text-white transition-colors"
+                          onClick={() => { setFile(null); setFileName(null); setFilePreview(null); }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {filePreview.slice(0, 8).map((h) => (
+                          <span key={h.ticker} className="text-xs bg-[#2A2A2D] text-[#8B8B8B] px-2 py-1 rounded">
+                            {h.ticker}: {h.qty}
+                          </span>
+                        ))}
+                        {filePreview.length > 8 && (
+                          <span className="text-xs text-[#6B6B6B]">+{filePreview.length - 8} more</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 p-3">
+                    {/* File upload button */}
+                    <label className="flex items-center justify-center w-10 h-10 rounded-lg bg-[#2A2A2D] hover:bg-[#3A3A3D] cursor-pointer transition-colors">
+                      <Upload className="w-4 h-4 text-[#8B8B8B]" />
                       <input
                         type="file"
                         accept=".csv,.txt,.xls,.xlsx"
@@ -335,25 +344,18 @@ export default function Chat() {
                         onChange={onFileSelected}
                       />
                     </label>
-                    {fileName && (
-                      <button type="button" className="text-[11px] text-muted-foreground underline" onClick={() => { setFile(null); setFileName(null); setFilePreview(null); }}>
-                        Remove file
-                      </button>
-                    )}
-                  </div>
 
-                  <Controller
-                    name="message"
-                    control={form.control}
-                    render={({ field, fieldState }) => (
-                      <Field data-invalid={fieldState.invalid}>
-                        <FieldLabel htmlFor="chat-form-message" className="sr-only">Message</FieldLabel>
-                        <div className="relative h-13">
+                    {/* Message input */}
+                    <Controller
+                      name="message"
+                      control={form.control}
+                      render={({ field, fieldState }) => (
+                        <div className="flex-1">
                           <Input
                             {...field}
                             id="chat-form-message"
-                            className="h-15 pr-15 pl-5 bg-card rounded-[20px]"
-                            placeholder={file ? 'Optional: add a question about the uploaded portfolio...' : 'Type your message here...'}
+                            className="h-10 bg-transparent border-0 text-white placeholder:text-[#6B6B6B] focus-visible:ring-0 focus-visible:border-0 px-0"
+                            placeholder={file ? 'Add a question about your portfolio...' : 'Ask about your portfolio...'}
                             disabled={status === 'streaming'}
                             aria-invalid={fieldState.invalid}
                             autoComplete="off"
@@ -364,41 +366,41 @@ export default function Chat() {
                               }
                             }}
                           />
-                          {(status === 'ready' || status === 'error') && (
-                            <Button className="absolute right-3 top-3 rounded-full" type="submit" disabled={!field.value.trim() && !file} size="icon">
-                              <ArrowUp className="size-4" />
-                            </Button>
-                          )}
-                          {(status === 'streaming' || status === 'submitted') && (
-                            <Button className="absolute right-2 top-2 rounded-full" size="icon" type="button" onClick={() => { stop(); }}>
-                              <Square className="size-4" />
-                            </Button>
-                          )}
                         </div>
-                      </Field>
+                      )}
+                    />
+
+                    {/* Send/Stop button */}
+                    {(status === 'ready' || status === 'error') ? (
+                      <Button 
+                        type="submit" 
+                        disabled={!form.watch('message').trim() && !file}
+                        size="icon"
+                        className="w-10 h-10 rounded-lg bg-white hover:bg-gray-200 disabled:bg-[#2A2A2D] disabled:text-[#6B6B6B]"
+                      >
+                        <ArrowUp className="w-4 h-4 text-[#0D0D0E]" />
+                      </Button>
+                    ) : (
+                      <Button 
+                        type="button" 
+                        onClick={() => stop()}
+                        size="icon"
+                        className="w-10 h-10 rounded-lg bg-[#2A2A2D] hover:bg-[#3A3A3D]"
+                      >
+                        <div className="w-3 h-3 bg-white rounded-sm" />
+                      </Button>
                     )}
-                  />
-                </FieldGroup>
+                  </div>
+                </div>
               </form>
 
-              {/* File preview */}
-              {filePreview && filePreview.length > 0 && (
-                <div className="mt-3 p-3 border rounded max-w-3xl bg-card">
-                  <div className="font-medium mb-2">Preview detected holdings</div>
-                  <ul className="list-disc pl-5">
-                    {filePreview.map((h) => (
-                      <li key={h.ticker}>{h.ticker}: {h.qty}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {/* Footer */}
+              <div className="flex items-center justify-center gap-1 mt-3 text-xs text-[#4A4A4D]">
+                <span>&copy; {new Date().getFullYear()} {OWNER_NAME}</span>
+                <span className="mx-1">·</span>
+                <Link href="/terms" className="hover:text-[#6B6B6B] transition-colors">Terms</Link>
+              </div>
             </div>
-          </div>
-          <div className="w-full px-5 py-3 items-center flex justify-center text-xs text-muted-foreground">
-            © {new Date().getFullYear()} {OWNER_NAME}&nbsp;
-            <Link href="/terms" className="underline">Terms of Use</Link>
-            &nbsp;Powered by&nbsp;
-            <Link href="https://ringel.ai/" className="underline">Ringel.AI</Link>
           </div>
         </div>
       </main>
