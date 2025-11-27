@@ -2,15 +2,15 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { useChat } from "@ai-sdk/react";
+
 import { Button } from "@/components/ui/button";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 
 type Holding = { ticker: string; qty: number };
 
-export default function FileUploader() {
-  const { sendMessage } = useChat();
+export default function FileUploader({ sendMessage }: { sendMessage: any }) {
+  // const { sendMessage } = useChat(); // Removed internal hook
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<Holding[] | null>(null);
@@ -88,8 +88,8 @@ export default function FileUploader() {
     if (!preview || preview.length === 0) return;
     const payloadObj = { holdings: preview };
     const payloadText = `<HOLDINGS_JSON>${JSON.stringify(payloadObj)}</HOLDINGS_JSON>\n`;
-    await sendMessage({ text: `I've uploaded ${filename || "file"}. Sending holdings for analysis.` });
-    await sendMessage({ text: payloadText });
+    const messageText = `I've uploaded ${filename || "file"}. Please analyze these holdings based on the system instructions.\n\n${payloadText}`;
+    await sendMessage({ text: messageText });
     setPreview(null);
     setFilename(null);
   }
