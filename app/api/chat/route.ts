@@ -1,3 +1,4 @@
+// app/api/chat/route.ts  (replace your existing file)
 import {
   streamText,
   UIMessage,
@@ -13,19 +14,83 @@ import { isContentFlagged } from "@/lib/moderation";
 import { webSearch } from "./tools/web-search";
 import { vectorDatabaseSearch } from "./tools/search-vector-database";
 
+import Papa from "papaparse";
+import * as XLSX from "xlsx";
+
 export const maxDuration = 30;
 
-export async function POST(req: Request) {
-  const {
-    messages,
-    imageBase64,
-    fileName,
-  }: {
-    messages: UIMessage[];
-    imageBase64?: string;
-    fileName?: string;
-  } = await req.json();
+type IncomingJson = {
+  messages?: UIMessage[];
+  imageBase64?: string;
+  fileName?: string;
+};
 
+function normalizeRowsToHoldings(rows: any[]): { ticker: string; qty: number }[] {
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    const keys = Object.keys(r);
+    let ticker = "";
+    let qty: number | null = null;
+
+    if ("ticker" in r) ticker = String(r["ticker"]).trim();
+    else if ("symbol" in r) ticker = String(r["symbol"]).trim();
+    else if (keys.length >= 1) ticker = String(r[keys[0]]).trim();
+
+    if ("qty" in r) qty = Number(r["qty"]);
+    else if ("quantity" in r) qty = Number(r["quantity"]);
+    else if (keys.length >= 2) qty = Number(r[keys[1]]);
+
+    if (!ticker) continue;
+    if (!qty || isNaN(qty)) qty = 0;
+    const normTicker = ticker.toUpperCase();
+    out[normTicker] = (out[normTicker] || 0) + qty;
+  }
+  return Object.entries(out).map(([ticker, qty]) => ({ ticker, qty }));
+}
+
+export async function POST(req: Request) {
+  // support both JSON body and multipart/form-data with file
+  let incoming: IncomingJson = {};
+  let uploadedFile: File | null = null;
+
+  const contentType = req.headers.get("content-type") || "";
+
+  if (contentType.startsWith("multipart/form-data")) {
+    // form-data path (browser file upload)
+    try {
+      const form = await req.formData();
+      uploadedFile = (form.get("file") as unknown) as File | null;
+
+      // also allow optional messages/imageBase64 fields in form
+      const messagesRaw = form.get("messages") as string | null;
+      if (messagesRaw) {
+        try {
+          incoming.messages = JSON.parse(messagesRaw) as UIMessage[];
+        } catch {
+          // ignore parse error — fallback to not having messages
+        }
+      }
+
+      const imageBase64 = form.get("imageBase64") as string | null;
+      if (imageBase64) incoming.imageBase64 = imageBase64;
+
+      const fileName = form.get("fileName") as string | null;
+      if (fileName) incoming.fileName = fileName;
+    } catch (err) {
+      console.error("Failed to parse formData", err);
+      return new Response(JSON.stringify({ error: "Invalid form data" }), { status: 400 });
+    }
+  } else {
+    // JSON path (existing behavior)
+    try {
+      incoming = (await req.json()) as IncomingJson;
+    } catch (err) {
+      console.error("Failed to parse JSON body", err);
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400 });
+    }
+  }
+
+  const messages = incoming.messages || [];
   const latestUserMessage = messages.filter((msg) => msg.role === "user").pop();
 
   if (latestUserMessage) {
@@ -75,57 +140,117 @@ export async function POST(req: Request) {
     }
   }
 
+  // Convert incoming UIMessage[] to core model messages
   const baseModelMessages = convertToModelMessages(messages);
 
-  let modelMessagesWithImage: CoreMessage[];
+  // If a file was uploaded, parse it server-side and append a structured holdings message
+  let modelMessagesToUse: CoreMessage[] = baseModelMessages as CoreMessage[];
 
-  if (imageBase64 && baseModelMessages.length > 0) {
-    const initialMessages = baseModelMessages.slice(0, -1);
-    const lastMessage = baseModelMessages[baseModelMessages.length - 1];
+  if (uploadedFile) {
+    try {
+      const fname = uploadedFile.name || "upload";
+      const lower = fname.toLowerCase();
 
-    let lastText = "";
+      let rows: any[] = [];
 
-    if (typeof lastMessage.content === "string") {
-      lastText = lastMessage.content;
-    } else if (Array.isArray(lastMessage.content)) {
-      lastText = lastMessage.content
-        .filter(
-          (part: any) =>
-            part &&
-            part.type === "text" &&
-            typeof part.text === "string"
-        )
-        .map((part: any) => part.text)
-        .join(" ");
+      if (lower.endsWith(".csv") || lower.endsWith(".txt")) {
+        const text = await uploadedFile.text();
+        const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+        rows = parsed.data as any[];
+      } else if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) {
+        const ab = await uploadedFile.arrayBuffer();
+        const wb = XLSX.read(ab, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as any[];
+      } else {
+        // unsupported file type — create a short user text saying file couldn't be parsed
+        const fileMessage: CoreMessage = {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `I uploaded a file named ${fname} but the server could not parse its type. Please upload CSV or XLSX.`,
+            },
+          ],
+        };
+        modelMessagesToUse = [...(baseModelMessages as CoreMessage[]), fileMessage];
+      }
+
+      if (rows && rows.length > 0) {
+        const holdings = normalizeRowsToHoldings(rows);
+        const payloadText = `<HOLDINGS_JSON>${JSON.stringify({ holdings })}</HOLDINGS_JSON>`;
+
+        const fileMessage: CoreMessage = {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `User uploaded file ${fname} with detected holdings:`,
+            },
+            {
+              type: "text",
+              text: payloadText,
+            },
+          ],
+        };
+
+        modelMessagesToUse = [...(baseModelMessages as CoreMessage[]), fileMessage];
+      }
+    } catch (err) {
+      console.error("Error parsing uploaded file:", err);
+      // fall back to base messages if parsing fails
+      modelMessagesToUse = baseModelMessages as CoreMessage[];
     }
-
-    const combinedLast: CoreMessage = {
-      role: "user",
-      content: [
-        ...(lastText
-          ? [
-              {
-                type: "text" as const,
-                text: lastText,
-              },
-            ]
-          : []),
-        {
-          type: "image" as const,
-          image: imageBase64,
-        },
-      ],
-    };
-
-    modelMessagesWithImage = [...initialMessages, combinedLast];
   } else {
-    modelMessagesWithImage = baseModelMessages as CoreMessage[];
+    // No file upload path: preserve image handling and possible imageBase64
+    if (incoming.imageBase64 && baseModelMessages.length > 0) {
+      const initialMessages = baseModelMessages.slice(0, -1);
+      const lastMessage = baseModelMessages[baseModelMessages.length - 1];
+
+      let lastText = "";
+
+      if (typeof lastMessage.content === "string") {
+        lastText = lastMessage.content;
+      } else if (Array.isArray(lastMessage.content)) {
+        lastText = lastMessage.content
+          .filter(
+            (part: any) =>
+              part &&
+              part.type === "text" &&
+              typeof part.text === "string"
+          )
+          .map((part: any) => part.text)
+          .join(" ");
+      }
+
+      const combinedLast: CoreMessage = {
+        role: "user",
+        content: [
+          ...(lastText
+            ? [
+                {
+                  type: "text" as const,
+                  text: lastText,
+                },
+              ]
+            : []),
+          {
+            type: "image" as const,
+            image: incoming.imageBase64,
+          },
+        ],
+      };
+
+      modelMessagesToUse = [...initialMessages, combinedLast];
+    } else {
+      modelMessagesToUse = baseModelMessages as CoreMessage[];
+    }
   }
 
   const result = streamText({
     model: MODEL,
     system: SYSTEM_PROMPT,
-    messages: modelMessagesWithImage,
+    messages: modelMessagesToUse,
     tools: {
       webSearch,
       vectorDatabaseSearch,
@@ -144,3 +269,4 @@ export async function POST(req: Request) {
     sendReasoning: true,
   });
 }
+
